@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 
 const express = require('express');
@@ -9,13 +10,14 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
-// Health endpoint
+// Health endpoint - CD version test
 app.get('/health', async (req, res) => {
   const databaseReady = mongoose.connection.readyState === 1;
 
   res.status(databaseReady ? 200 : 503).json({
     status: databaseReady ? 'ok' : 'unavailable',
-    database: databaseReady ? 'connected' : 'disconnected'
+    database: databaseReady ? 'connected' : 'disconnected',
+    version: 'cd-test-1'
   });
 });
 
@@ -125,7 +127,9 @@ app.put('/api/products/:pid', async (req, res) => {
     );
 
     if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+      return res.status(404).json({
+        message: 'Product not found'
+      });
     }
 
     return res.status(200).json(product);
@@ -149,13 +153,17 @@ app.delete('/api/products/:pid', async (req, res) => {
     const pid = Number(req.params.pid);
 
     if (!Number.isInteger(pid) || pid < 1) {
-      return res.status(400).json({ message: 'Invalid pid' });
+      return res.status(400).json({
+        message: 'Invalid pid'
+      });
     }
 
     const product = await Product.findOneAndDelete({ pid });
 
     if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
+      return res.status(404).json({
+        message: 'Product not found'
+      });
     }
 
     return res.status(200).json({
@@ -169,6 +177,7 @@ app.delete('/api/products/:pid', async (req, res) => {
   }
 });
 
+// Connect MongoDB and start server
 async function startServer() {
   if (!process.env.MONGODB_URI) {
     throw new Error('MONGODB_URI is not configured in .env');
