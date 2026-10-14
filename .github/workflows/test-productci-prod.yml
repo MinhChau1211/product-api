@@ -1,0 +1,77 @@
+
+name: Product API Production CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mongo:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok' | grep 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Start Product API
+        env:
+          PORT: 3000
+          MONGODB_URI: mongodb://127.0.0.1:27017/productdb
+        run: |
+          npm start > app.log 2>&1 &
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:3000/health > health.json; then
+              break
+            fi
+            sleep 2
+          done
+          cat health.json
+          grep -q '"status":"ok"' health.json
+          grep -q '"database":"connected"' health.json
+
+      - name: Test CREATE
+        run: |
+          curl -fsS -X POST http://127.0.0.1:3000/api/products \
+            -H "Content-Type: application/json" \
+            -d '{"pid":900001,"pname":"CI Keyboard","price":500000,"quantity":10}'
+
+      - name: Test READ
+        run: |
+          curl -fsS http://127.0.0.1:3000/api/products \
+            | grep -q "CI Keyboard"
+
+      - name: Test UPDATE
+        run: |
+          curl -fsS -X PUT http://127.0.0.1:3000/api/products/900001 \
+            -H "Content-Type: application/json" \
+            -d '{"price":450000,"quantity":8}'
+
+      - name: Test DELETE
+        run: |
+          curl -fsS -X DELETE http://127.0.0.1:3000/api/products/900001
+
+      - name: Build Docker image
+        run: docker build -t product-api:ci .
