@@ -1,0 +1,43 @@
+
+services:
+  mongo:
+    image: mongo:8
+    restart: unless-stopped
+    volumes:
+      - mongo_prod_data:/data/db
+    healthcheck:
+      test:
+        - CMD
+        - mongosh
+        - --quiet
+        - --eval
+        - "db.adminCommand('ping').ok"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  api:
+    image: minhchau1211/product-api:latest
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      PORT: 3000
+      MONGODB_URI: mongodb://mongo:27017/productdb
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then(async r=>{const j=await r.json();process.exit(r.ok && j.status==='ok' && j.database==='connected'?0:1)}).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mongo_prod_data:
